@@ -163,6 +163,14 @@ Add the MCP server in your Codex CLI configuration so it can call `telegram_prom
 }
 ```
 
+Or add it via the Codex CLI:
+
+```bash
+codex mcp add telegram -- python -m codex_mcp_server.server
+Added global MCP server 'telegram'.
+codex mcp list
+```
+
 ## Development
 
 ```bash
