@@ -8,7 +8,7 @@ An MCP (Model Context Protocol) server that provides a Telegram escalation tool 
 - 📱 **Telegram Escalation Tool**: MCP tool to ask humans for input over Telegram
 - 🔒 **Security**: User authentication via allowed user IDs
 - ⚡ **Async Execution**: Non-blocking command execution
-- 📝 **Multiple Commands**: Support for exec, review, and status checks
+- 🧭 **Two-step Flow**: Prompt a human and poll for the answer
 - 💬 **Agentic Escalation**: Codex explicitly calls an MCP tool to request human guidance
 
 ## Prerequisites
@@ -73,9 +73,10 @@ codex-mcp-server
 
 The server communicates via stdio following the MCP protocol.
 
-### Telegram MCP Escalation Tool
+### Telegram MCP Escalation Tools
 
-The MCP tool `telegram_notify_and_wait` sends a message to the configured chat and waits for a reply.
+The MCP tool `telegram_prompt` sends a message to the configured chat and returns a `correlation_id`.
+Use `telegram_poll` to check for a reply using that ID.
 
 **Reply format:** `#<correlation_id> <answer>`
 
@@ -97,19 +98,30 @@ Reply with #<id> <answer>
 
 ## MCP Tools
 
-The server exposes the following MCP tool:
+The server exposes the following MCP tools:
 
-### `telegram_notify_and_wait`
+### `telegram_prompt`
 
-Send a Telegram message and wait for a human response.
+Send a Telegram message and return a correlation ID.
 
 **Parameters:**
 - `question` (required): Question to send
-- `timeout_sec` (optional): Seconds to wait (default: 1800)
 - `context` (optional): Additional context to include
 
 **Response:**
-Returns JSON with `answer` and `correlation_id`. On timeout, `answer` is `null` and an `error` field is included.
+Returns JSON with `correlation_id`.
+
+### `telegram_poll`
+
+Check for a human response associated with a correlation ID.
+
+**Parameters:**
+- `correlation_id` (required): ID returned from `telegram_prompt`
+
+**Response:**
+Returns JSON with:
+- `status`: `pending`, `answered`, `expired`, or `unknown`
+- `answer`: Present when `status` is `answered`
 
 ## Security Considerations
 
@@ -123,7 +135,7 @@ Returns JSON with `answer` and `correlation_id`. On timeout, `answer` is `null` 
 
 ## Troubleshooting
 
-### "Telegram bridge not starting"
+### "Telegram bot not starting"
 - Check that `TELEGRAM_BOT_TOKEN` is set correctly
 - Verify network connectivity to Telegram API
 - Check logs for detailed error messages
@@ -138,7 +150,7 @@ Returns JSON with `answer` and `correlation_id`. On timeout, `answer` is `null` 
 
 ## MCP Client Configuration (Codex CLI)
 
-Add the MCP server in your Codex CLI configuration so it can call `telegram_notify_and_wait`:
+Add the MCP server in your Codex CLI configuration so it can call `telegram_prompt` and `telegram_poll`:
 
 ```json
 {
@@ -164,22 +176,17 @@ pytest
 PYTHONPATH=. python -m codex_mcp_server.server
 ```
 
-### Local Telegram Tool Test
-
-```bash
-python scripts/telegram_notify_test.py "Should I proceed with the deploy?"
-```
-
 ## Manual Verification Checklist
 
 If automated tests are not available, verify the following manually:
 
-- Start the MCP server and call `telegram_notify_and_wait`.
-- Confirm the Telegram message includes the correlation ID and reply instructions.
-- Reply with `#<id> <answer>` from an allowed user ID and confirm the tool returns the answer.
+- Start the MCP server.
+- Call `telegram_prompt` and confirm the Telegram message includes the correlation ID and reply instructions.
+- Reply with `#<id> <answer>` from an allowed user ID.
+- Call `telegram_poll` and confirm the tool returns `status=answered` and the answer.
 - Reply without `#<id>` and confirm nothing happens.
 - Reply from an unallowed user ID and confirm nothing happens.
-- Let the call time out and confirm the tool returns a clear timeout error.
+- Wait for the request to expire and confirm the tool returns `status=expired`.
 
 ## License
 
