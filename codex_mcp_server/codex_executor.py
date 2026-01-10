@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import shutil
-from typing import Optional, Callable, Dict, Any
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -11,26 +11,20 @@ logger = logging.getLogger(__name__)
 class CodexExecutor:
     """Handles execution of Codex CLI commands."""
     
-    def __init__(self, notification_callback: Optional[Callable] = None):
+    def __init__(self):
         """
         Initialize the executor and find codex binary.
-        
-        Args:
-            notification_callback: Optional callback for notifications when Codex needs guidance.
-                                  Should accept (question_type, message, context)
         """
         self.codex_path = shutil.which("codex")
         if not self.codex_path:
             raise RuntimeError("Codex CLI not found in PATH. Please install Codex CLI first.")
         logger.info(f"Found Codex CLI at: {self.codex_path}")
-        self.notification_callback = notification_callback
     
     async def execute(
         self, 
         prompt: str, 
         model: Optional[str] = None, 
-        timeout: int = 300,
-        monitor: bool = True
+        timeout: int = 300
     ) -> str:
         """
         Execute a Codex CLI command with the given prompt.
@@ -50,46 +44,13 @@ class CodexExecutor:
             cmd.extend(["-m", model])
         
         try:
-            context = {
-                'command': ' '.join(cmd),
-                'prompt': prompt,
-                'model': model
-            }
-            
-            if monitor and self.notification_callback:
-                # Use streaming mode with monitoring
-                return await self._execute_with_monitoring(cmd, context, timeout)
-            else:
-                # Use standard non-monitored execution
-                return await self._execute_standard(cmd, timeout)
+            return await self._execute_standard(cmd, timeout)
         
         except asyncio.TimeoutError:
-            error_msg = f"Error: Command timed out after {timeout} seconds"
-            if self.notification_callback:
-                try:
-                    from .codex_monitor import QuestionType
-                    await self.notification_callback(
-                        QuestionType.ERROR,
-                        error_msg,
-                        context
-                    )
-                except Exception as e:
-                    logger.error(f"Error sending timeout notification: {e}")
-            return error_msg
+            return f"Error: Command timed out after {timeout} seconds"
         except Exception as e:
             logger.error(f"Error executing Codex command: {e}", exc_info=True)
-            error_msg = f"Error executing command: {str(e)}"
-            if self.notification_callback:
-                try:
-                    from .codex_monitor import QuestionType
-                    await self.notification_callback(
-                        QuestionType.ERROR,
-                        error_msg,
-                        {'command': ' '.join(cmd), 'error': str(e)}
-                    )
-                except Exception as notify_err:
-                    logger.error(f"Error sending error notification: {notify_err}")
-            return error_msg
+            return f"Error executing command: {str(e)}"
     
     async def _execute_standard(self, cmd: list[str], timeout: int) -> str:
         """Standard execution without monitoring."""
@@ -112,57 +73,6 @@ class CodexExecutor:
         output = stdout.decode('utf-8', errors='replace') if stdout else ""
         return output.strip() or "Command executed successfully (no output)"
     
-    async def _execute_with_monitoring(
-        self, 
-        cmd: list[str], 
-        context: Dict[str, Any], 
-        timeout: int
-    ) -> str:
-        """Execute with output monitoring for questions/errors."""
-        from .codex_monitor import CodexMonitor
-        
-        monitor = CodexMonitor(self.notification_callback)
-        
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=None
-            )
-            
-            # Monitor stdout and stderr concurrently
-            stdout_task = asyncio.create_task(
-                monitor.monitor_stream(process.stdout, context)
-            )
-            stderr_task = asyncio.create_task(
-                monitor.monitor_stream(process.stderr, {**context, 'stream': 'stderr'})
-            )
-            
-            # Wait for process completion with timeout
-            try:
-                await asyncio.wait_for(
-                    asyncio.gather(stdout_task, stderr_task, process.wait()),
-                    timeout=timeout
-                )
-            except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
-                raise asyncio.TimeoutError(f"Command timed out after {timeout} seconds")
-            
-            stdout_output = await stdout_task
-            stderr_output = await stderr_task
-            
-            if process.returncode != 0:
-                error_msg = stderr_output if stderr_output else "Unknown error"
-                return f"Codex CLI error (exit code {process.returncode}): {error_msg}"
-            
-            output = stdout_output if stdout_output else ""
-            return output.strip() or "Command executed successfully (no output)"
-        
-        except Exception as e:
-            logger.error(f"Error in monitored execution: {e}", exc_info=True)
-            raise
     
     async def review(self, target: str, review_prompt: Optional[str] = None, timeout: int = 300) -> str:
         """
