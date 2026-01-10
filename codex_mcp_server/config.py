@@ -61,6 +61,11 @@ class Config:
         
         # Codex CLI settings
         self.codex_default_model = os.getenv("CODEX_DEFAULT_MODEL", "")
+        
+        # Proactive notification settings
+        self.enable_proactive_notifications = os.getenv("CODEX_PROACTIVE_NOTIFICATIONS", "true").lower() == "true"
+        self.notify_on_questions = os.getenv("CODEX_NOTIFY_ON_QUESTIONS", "true").lower() == "true"
+        self.notify_on_errors = os.getenv("CODEX_NOTIFY_ON_ERRORS", "true").lower() == "true"
     
     def validate(self) -> tuple[bool, Optional[str]]:
         """

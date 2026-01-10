@@ -47,6 +47,10 @@ logger = logging.getLogger(__name__)
 # Create server instance
 app = Server("codex-mcp-telegram")
 
+# Global executor with notification support (will be initialized in main)
+_global_executor: Optional[CodexExecutor] = None
+_telegram_bot: Optional[TelegramBot] = None
+
 
 @app.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
@@ -110,12 +114,15 @@ async def handle_call_tool(
         arguments = {}
     
     try:
-        executor = CodexExecutor()
+        # Use global executor if available (has notification support), otherwise create new one
+        executor = _global_executor if _global_executor else CodexExecutor()
         
         if name == "codex_exec":
             prompt = arguments.get("prompt", "")
             model = arguments.get("model")
-            result = await executor.execute(prompt, model=model)
+            # Enable monitoring for proactive notifications
+            monitor = _telegram_bot is not None
+            result = await executor.execute(prompt, model=model, monitor=monitor)
             return [types.TextContent(
                 type="text",
                 text=result
@@ -171,14 +178,21 @@ async def main():
         logger.error(f"Configuration error: {error_msg}")
         sys.exit(1)
     
-    # Start Telegram bot if configured
+    # Start Telegram bot if configured (bot will create executor with notification support)
+    global _global_executor, _telegram_bot
     telegram_bot: Optional[TelegramBot] = None
     bot_task: Optional[asyncio.Task] = None
     if config.telegram_enabled:
         try:
             telegram_bot = TelegramBot(config, app)
+            _telegram_bot = telegram_bot  # Store globally
+            # Use the bot's executor (which has notification support) as the global one
+            _global_executor = telegram_bot.executor
             bot_task = asyncio.create_task(telegram_bot.start())
-            logger.info("Telegram bot starting...")
+            if config.enable_proactive_notifications:
+                logger.info("Telegram bot starting with proactive notification support...")
+            else:
+                logger.info("Telegram bot starting...")
             # Give bot a moment to initialize
             await asyncio.sleep(1)
         except Exception as e:

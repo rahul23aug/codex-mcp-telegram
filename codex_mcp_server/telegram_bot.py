@@ -15,6 +15,7 @@ except ImportError:
 
 from .config import Config
 from .codex_executor import CodexExecutor
+from .codex_monitor import QuestionType
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,15 @@ class TelegramBot:
         
         self.config = config
         self.mcp_server = mcp_server
-        self.executor = CodexExecutor()
+        
+        # Initialize executor with notification callback for proactive notifications
+        if config.enable_proactive_notifications:
+            self.executor = CodexExecutor(notification_callback=self._send_proactive_notification)
+        else:
+            self.executor = CodexExecutor()
+        
+        # Store active sessions for response handling
+        self.active_sessions: dict[str, dict] = {}
         
         # Initialize Telegram application
         self.application = Application.builder().token(config.telegram_bot_token).build()
@@ -129,9 +138,13 @@ class TelegramBot:
             "  Example: `/exec write a Python hello world`\n\n"
             "• `/review <file_or_dir>` - Review code\n"
             "  Example: `/review /path/to/file.py`\n\n"
+            "• `/respond <guidance>` - Provide guidance when Codex asks\n"
+            "  Example: `/respond yes, proceed with the changes`\n\n"
             "• `/status` - Check if Codex CLI is available\n\n"
             "• `/help` - Show this help message\n\n"
-            "You can also send plain text messages - they'll be treated as `/exec` commands."
+            "You can also send plain text messages - they'll be treated as `/exec` commands.\n\n"
+            "💡 *Proactive Notifications:* Codex will automatically notify you via Telegram "
+            "when it needs your guidance, has questions, or encounters errors."
         )
         await update.message.reply_text(help_text, parse_mode='Markdown')
     
@@ -240,6 +253,123 @@ class TelegramBot:
         
         # Treat as exec command
         await self._handle_exec(update, context)
+    
+    async def _send_proactive_notification(
+        self, 
+        question_type: QuestionType, 
+        message: str, 
+        context: dict
+    ):
+        """
+        Send proactive notification when Codex needs guidance.
+        
+        Args:
+            question_type: Type of question/issue detected
+            message: The message/question from Codex
+            context: Context information (command, prompt, etc.)
+        """
+        if not self.config.telegram_enabled:
+            return
+        
+        # Check if we should notify for this type
+        if question_type == QuestionType.ERROR and not self.config.notify_on_errors:
+            return
+        if question_type != QuestionType.ERROR and not self.config.notify_on_questions:
+            return
+        
+        # Determine which chat IDs to notify
+        chat_ids = set()
+        if self.config.telegram_chat_id:
+            try:
+                chat_ids.add(int(self.config.telegram_chat_id))
+            except (ValueError, TypeError):
+                pass
+        chat_ids.update(self.config.telegram_allowed_user_ids)
+        
+        if not chat_ids:
+            logger.warning("No chat IDs configured for proactive notifications")
+            return
+        
+        # Build notification message
+        emoji_map = {
+            QuestionType.CONFIRMATION: "❓",
+            QuestionType.CHOICE: "🤔",
+            QuestionType.CLARIFICATION: "💭",
+            QuestionType.PERMISSION: "🔐",
+            QuestionType.UNCERTAINTY: "🤷",
+            QuestionType.ERROR: "⚠️",
+        }
+        emoji = emoji_map.get(question_type, "📢")
+        type_name = question_type.value.replace("_", " ").title()
+        
+        notification = (
+            f"{emoji} *Codex Needs Your Guidance*\n\n"
+            f"*Type:* {type_name}\n\n"
+            f"*Message:*\n```\n{message[:500]}\n```\n"
+        )
+        
+        # Add context if available
+        if context:
+            context_parts = []
+            if context.get('command'):
+                context_parts.append(f"*Command:* `{context['command'][:100]}`")
+            if context.get('prompt'):
+                context_parts.append(f"*Prompt:* `{context['prompt'][:100]}`")
+            if context.get('stream'):
+                context_parts.append(f"*Stream:* {context['stream']}")
+            
+            if context_parts:
+                notification += "\n" + "\n".join(context_parts)
+        
+        notification += (
+            "\n\n_Codex is waiting for your guidance. "
+            "You can respond via Telegram or check the logs._"
+        )
+        
+        # Send notification to all authorized users
+        for chat_id in chat_ids:
+            try:
+                await self.application.bot.send_message(
+                    chat_id=chat_id,
+                    text=notification,
+                    parse_mode='Markdown'
+                )
+                logger.info(f"Sent proactive notification to chat {chat_id}")
+            except Exception as e:
+                logger.error(f"Failed to send proactive notification to {chat_id}: {e}", exc_info=True)
+    
+    async def _handle_respond(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /respond command for providing guidance back to Codex."""
+        user_id = update.effective_user.id
+        message_text = update.message.text or ""
+        
+        authorized, error = self._is_authorized(user_id, message_text)
+        if not authorized:
+            await update.message.reply_text(f"❌ {error}")
+            return
+        
+        # Extract response from command
+        response = message_text.replace("/respond", "").strip()
+        if not response:
+            await update.message.reply_text(
+                "❌ Please provide a response. Usage: `/respond <your_guidance>`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Remove auth token if present
+        if self.config.telegram_auth_token and self.config.telegram_auth_token in response:
+            import re
+            response = re.sub(rf'\s*{re.escape(self.config.telegram_auth_token)}\s*', ' ', response).strip()
+        
+        # For now, log the response (could be extended to send back to Codex process)
+        logger.info(f"User {user_id} provided guidance: {response}")
+        await update.message.reply_text(
+            f"✅ Guidance received: `{response[:100]}`\n\n"
+            "Note: Interactive response handling is being processed. "
+            "Check your Codex logs for the full interaction.",
+            parse_mode='Markdown'
+        )
     
     async def start(self):
         """Start the Telegram bot."""

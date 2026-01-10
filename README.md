@@ -6,9 +6,11 @@ An MCP (Model Context Protocol) server that wraps Codex CLI commands and provide
 
 - 🔧 **MCP Server**: Exposes Codex CLI commands as MCP tools
 - 📱 **Telegram Integration**: Remote access via Telegram bot
+- 🚨 **Proactive Notifications**: Codex automatically reaches out via Telegram when it needs your guidance, has questions, or encounters errors
 - 🔒 **Security**: User authentication via allowed user IDs or auth tokens
 - ⚡ **Async Execution**: Non-blocking command execution
 - 📝 **Multiple Commands**: Support for exec, review, and status checks
+- 💬 **Interactive Guidance**: Respond to Codex's questions via Telegram
 
 ## Prerequisites
 
@@ -54,6 +56,12 @@ The server uses environment variables for configuration:
 - `MAX_COMMAND_LENGTH`: Maximum command length (default: 1000)
 - `COMMAND_TIMEOUT`: Command execution timeout in seconds (default: 300)
 - `CODEX_DEFAULT_MODEL`: Default model to use for Codex commands (e.g., "o1", "o3")
+- `CODEX_PROACTIVE_NOTIFICATIONS`: Enable proactive notifications when Codex needs guidance (default: true)
+- `CODEX_NOTIFY_ON_QUESTIONS`: Notify when Codex has questions or needs clarification (default: true)
+- `CODEX_NOTIFY_ON_ERRORS`: Notify when Codex encounters errors (default: true)
+- `CODEX_PROACTIVE_NOTIFICATIONS`: Enable proactive notifications when Codex needs guidance (default: true)
+- `CODEX_NOTIFY_ON_QUESTIONS`: Notify when Codex has questions or needs clarification (default: true)
+- `CODEX_NOTIFY_ON_ERRORS`: Notify when Codex encounters errors (default: true)
 
 ### Example Configuration
 
@@ -106,8 +114,46 @@ When `TELEGRAM_BOT_TOKEN` is set, the server automatically starts the Telegram b
   - Example: `/exec write a Python hello world program`
 - `/review <path>` - Review code at specified path
   - Example: `/review /path/to/file.py`
+- `/respond <guidance>` - Provide guidance when Codex asks for help
+  - Example: `/respond yes, proceed with the changes`
 
 You can also send plain text messages - they'll be treated as `/exec` commands.
+
+### Proactive Notifications (Codex Reaches Out to You)
+
+When Codex CLI needs your guidance during execution, it will **automatically send you a Telegram notification**. This includes:
+
+- **Questions**: When Codex needs clarification or has doubts
+- **Confirmation Requests**: When Codex needs approval to proceed
+- **Choices**: When Codex needs you to make a decision
+- **Errors**: When Codex encounters issues that need attention
+- **Uncertainty**: When Codex is unsure about something
+
+**Example Notification:**
+```
+🚨 Codex Needs Your Guidance
+
+Type: Clarification
+
+Message:
+Should I proceed with deleting the old files?
+
+Command: codex exec clean up old files
+Prompt: clean up old files
+
+Codex is waiting for your guidance. 
+You can respond via Telegram or check the logs.
+```
+
+**Responding to Codex:**
+- Use `/respond <your_guidance>` to provide feedback when Codex asks
+- Example: `/respond yes, proceed with the changes`
+- Codex will continue its workflow based on your response
+
+**Configuration:**
+- `CODEX_PROACTIVE_NOTIFICATIONS=true` (default) - Enable proactive notifications
+- `CODEX_NOTIFY_ON_QUESTIONS=true` (default) - Notify on questions
+- `CODEX_NOTIFY_ON_ERRORS=true` (default) - Notify on errors
 
 ### Getting Your Telegram User ID
 
