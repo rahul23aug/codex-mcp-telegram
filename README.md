@@ -5,12 +5,11 @@ An MCP (Model Context Protocol) server that wraps Codex CLI commands and provide
 ## Features
 
 - 🔧 **MCP Server**: Exposes Codex CLI commands as MCP tools
-- 📱 **Telegram Integration**: Remote access via Telegram bot
-- 🚨 **Proactive Notifications**: Codex automatically reaches out via Telegram when it needs your guidance, has questions, or encounters errors
-- 🔒 **Security**: User authentication via allowed user IDs or auth tokens
+- 📱 **Telegram Escalation Tool**: MCP tool to ask humans for input over Telegram
+- 🔒 **Security**: User authentication via allowed user IDs
 - ⚡ **Async Execution**: Non-blocking command execution
 - 📝 **Multiple Commands**: Support for exec, review, and status checks
-- 💬 **Interactive Guidance**: Respond to Codex's questions via Telegram
+- 💬 **Agentic Escalation**: Codex explicitly calls an MCP tool to request human guidance
 
 ## Prerequisites
 
@@ -44,24 +43,17 @@ An MCP (Model Context Protocol) server that wraps Codex CLI commands and provide
 
 The server uses environment variables for configuration:
 
-### Required (for Telegram)
+### Required (for Telegram escalation tool)
 
 - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from BotFather
-- `TELEGRAM_CHAT_ID` or `TELEGRAM_ALLOWED_USER_IDS`: Chat ID or comma-separated list of allowed user IDs
+- `TELEGRAM_CHAT_ID`: Chat ID where the escalation prompts should be sent
+- `TELEGRAM_ALLOWED_USER_IDS`: Comma-separated list of Telegram user IDs allowed to reply
 
 ### Optional
 
-- `TELEGRAM_AUTH_TOKEN`: Custom authentication token (if not using allowed user IDs)
-- `TELEGRAM_ALLOWED_USER_IDS`: Comma-separated list of Telegram user IDs allowed to execute commands
 - `MAX_COMMAND_LENGTH`: Maximum command length (default: 1000)
 - `COMMAND_TIMEOUT`: Command execution timeout in seconds (default: 300)
 - `CODEX_DEFAULT_MODEL`: Default model to use for Codex commands (e.g., "o1", "o3")
-- `CODEX_PROACTIVE_NOTIFICATIONS`: Enable proactive notifications when Codex needs guidance (default: true)
-- `CODEX_NOTIFY_ON_QUESTIONS`: Notify when Codex has questions or needs clarification (default: true)
-- `CODEX_NOTIFY_ON_ERRORS`: Notify when Codex encounters errors (default: true)
-- `CODEX_PROACTIVE_NOTIFICATIONS`: Enable proactive notifications when Codex needs guidance (default: true)
-- `CODEX_NOTIFY_ON_QUESTIONS`: Notify when Codex has questions or needs clarification (default: true)
-- `CODEX_NOTIFY_ON_ERRORS`: Notify when Codex encounters errors (default: true)
 
 ### Example Configuration
 
@@ -69,16 +61,10 @@ Create a `.env` file or export environment variables:
 
 ```bash
 export TELEGRAM_BOT_TOKEN="your_bot_token_here"
+export TELEGRAM_CHAT_ID="123456789"
 export TELEGRAM_ALLOWED_USER_IDS="123456789,987654321"
 export COMMAND_TIMEOUT="600"
 export CODEX_DEFAULT_MODEL="o1"
-```
-
-Or use a single chat ID:
-
-```bash
-export TELEGRAM_BOT_TOKEN="your_bot_token_here"
-export TELEGRAM_CHAT_ID="123456789"
 ```
 
 ## Usage
@@ -101,59 +87,20 @@ codex-mcp-server
 
 The server communicates via stdio following the MCP protocol.
 
-### With Telegram Bot
+### Telegram MCP Escalation Tool
 
-When `TELEGRAM_BOT_TOKEN` is set, the server automatically starts the Telegram bot.
+The MCP tool `telegram_notify_and_wait` sends a message to the configured chat and waits for a reply.
 
-**Available Telegram Commands:**
+**Reply format:** `#<correlation_id> <answer>`
 
-- `/start` - Initialize the bot and show welcome message
-- `/help` - Show help and available commands
-- `/status` - Check Codex CLI availability and version
-- `/exec <prompt>` - Execute a Codex CLI command
-  - Example: `/exec write a Python hello world program`
-- `/review <path>` - Review code at specified path
-  - Example: `/review /path/to/file.py`
-- `/respond <guidance>` - Provide guidance when Codex asks for help
-  - Example: `/respond yes, proceed with the changes`
-
-You can also send plain text messages - they'll be treated as `/exec` commands.
-
-### Proactive Notifications (Codex Reaches Out to You)
-
-When Codex CLI needs your guidance during execution, it will **automatically send you a Telegram notification**. This includes:
-
-- **Questions**: When Codex needs clarification or has doubts
-- **Confirmation Requests**: When Codex needs approval to proceed
-- **Choices**: When Codex needs you to make a decision
-- **Errors**: When Codex encounters issues that need attention
-- **Uncertainty**: When Codex is unsure about something
-
-**Example Notification:**
+Example message:
 ```
-🚨 Codex Needs Your Guidance
+❓ MCP Escalation
 
-Type: Clarification
+Should we proceed with the migration?
 
-Message:
-Should I proceed with deleting the old files?
-
-Command: codex exec clean up old files
-Prompt: clean up old files
-
-Codex is waiting for your guidance. 
-You can respond via Telegram or check the logs.
+Reply with #<id> <answer>
 ```
-
-**Responding to Codex:**
-- Use `/respond <your_guidance>` to provide feedback when Codex asks
-- Example: `/respond yes, proceed with the changes`
-- Codex will continue its workflow based on your response
-
-**Configuration:**
-- `CODEX_PROACTIVE_NOTIFICATIONS=true` (default) - Enable proactive notifications
-- `CODEX_NOTIFY_ON_QUESTIONS=true` (default) - Notify on questions
-- `CODEX_NOTIFY_ON_ERRORS=true` (default) - Notify on errors
 
 ### Getting Your Telegram User ID
 
@@ -164,39 +111,29 @@ You can respond via Telegram or check the logs.
 
 ## MCP Tools
 
-The server exposes the following MCP tools:
+The server exposes the following MCP tool:
 
-### `codex_exec`
+### `telegram_notify_and_wait`
 
-Execute a Codex CLI command.
-
-**Parameters:**
-- `prompt` (required): The prompt/command to execute
-- `model` (optional): Model to use (e.g., "o1", "o3")
-
-### `codex_review`
-
-Run a code review on specified files or directories.
+Send a Telegram message and wait for a human response.
 
 **Parameters:**
-- `target` (required): File or directory path to review
-- `prompt` (optional): Specific review instructions
+- `question` (required): Question to send
+- `timeout_sec` (optional): Seconds to wait (default: 1800)
+- `context` (optional): Additional context to include
 
-### `codex_status`
-
-Check Codex CLI availability and version.
-
-**Parameters:** None
+**Response:**
+Returns JSON with `answer` and `correlation_id`. On timeout, `answer` is `null` and an `error` field is included.
 
 ## Security Considerations
 
-1. **Authentication**: Always configure either `TELEGRAM_ALLOWED_USER_IDS` or `TELEGRAM_AUTH_TOKEN` to prevent unauthorized access.
+1. **Authentication**: Always configure `TELEGRAM_ALLOWED_USER_IDS` to prevent unauthorized access.
 
 2. **Command Injection**: The server validates command length and uses proper subprocess execution. However, be cautious with prompts that may contain sensitive information.
 
 3. **Network**: The Telegram bot requires network access. Ensure your firewall allows outbound connections to `api.telegram.org`.
 
-4. **Tokens**: Never commit your bot token or auth tokens to version control. Use environment variables or secure configuration files.
+4. **Tokens**: Never commit your bot token to version control. Use environment variables or secure configuration files.
 
 ## Troubleshooting
 
@@ -204,18 +141,37 @@ Check Codex CLI availability and version.
 - Ensure Codex CLI is installed and in your PATH
 - Verify with: `which codex`
 
-### "Telegram bot not starting"
+### "Telegram bridge not starting"
 - Check that `TELEGRAM_BOT_TOKEN` is set correctly
 - Verify network connectivity to Telegram API
 - Check logs for detailed error messages
 
 ### "Unauthorized" errors
 - Verify your User ID is in `TELEGRAM_ALLOWED_USER_IDS` or `TELEGRAM_CHAT_ID` matches
-- Check that auth token (if used) is included in your messages
 
 ### Timeout errors
 - Increase `COMMAND_TIMEOUT` if commands take longer
 - Check Codex CLI logs for underlying issues
+
+### Telegram polling and timeouts
+- Ensure `TELEGRAM_CHAT_ID` matches the chat where the bot should post escalation messages
+- Replies must include the correlation ID: `#<id> <answer>`
+- If timeouts persist, confirm the bot has permission to read messages in the chat
+
+## MCP Client Configuration (Codex CLI)
+
+Add the MCP server in your Codex CLI configuration so it can call `telegram_notify_and_wait`:
+
+```json
+{
+  "mcpServers": {
+    "codex-mcp-telegram": {
+      "command": "codex-mcp-telegram",
+      "args": []
+    }
+  }
+}
+```
 
 ## Development
 
@@ -229,6 +185,23 @@ pytest
 # Run with debug logging
 PYTHONPATH=. python -m codex_mcp_server.server
 ```
+
+### Local Telegram Tool Test
+
+```bash
+python scripts/telegram_notify_test.py "Should I proceed with the deploy?"
+```
+
+## Manual Verification Checklist
+
+If automated tests are not available, verify the following manually:
+
+- Start the MCP server and call `telegram_notify_and_wait`.
+- Confirm the Telegram message includes the correlation ID and reply instructions.
+- Reply with `#<id> <answer>` from an allowed user ID and confirm the tool returns the answer.
+- Reply without `#<id>` and confirm nothing happens.
+- Reply from an unallowed user ID and confirm nothing happens.
+- Let the call time out and confirm the tool returns a clear timeout error.
 
 ## License
 
