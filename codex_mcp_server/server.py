@@ -34,8 +34,8 @@ class MCPServer:
         return {
             "tools": [
                 {
-                    "name": "telegram_prompt",
-                    "description": "Send a prompt via Telegram and return a correlation id.",
+                    "name": "telegram_notify_and_wait",
+                    "description": "Send a Telegram message and block until the human replies or the request expires.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -46,6 +46,19 @@ class MCPServer:
                         "additionalProperties": False,
                     },
                 },
+                # {
+                #     "name": "telegram_prompt",
+                #     "description": "Send a prompt via Telegram and return a correlation id.",
+                #     "inputSchema": {
+                #         "type": "object",
+                #         "properties": {
+                #             "question": {"type": "string"},
+                #             "context": {"type": "string"},
+                #         },
+                #         "required": ["question"],
+                #         "additionalProperties": False,
+                #     },
+                # },
                 {
                     "name": "telegram_poll",
                     "description": "Poll for a Telegram response by correlation id.",
@@ -60,7 +73,6 @@ class MCPServer:
                 },
             ]
         }
-
     async def _ensure_bot_started(self) -> tuple[bool, str | None]:
         if self.bot_task is None:
             self.bot_task = asyncio.create_task(self.bot.start())
@@ -75,20 +87,20 @@ class MCPServer:
     async def _handle_tools_call(self, params: dict) -> dict:
         name = params.get("name")
         arguments = params.get("arguments") or {}
-        if name == "telegram_prompt":
-            ok, error = await self._ensure_bot_started()
-            if not ok:
-                return {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": json.dumps({"error": error}),
-                        }
-                    ],
-                    "structuredContent": {"error": error},
-                    "isError": True,
-                }
-            result = await self.tools.telegram_prompt(**arguments)
+
+        ok, error = await self._ensure_bot_started()
+        if not ok:
+            return {
+                "content": [{"type": "text", "text": json.dumps({"error": error})}],
+                "structuredContent": {"error": error},
+                "isError": True,
+            }
+
+        if name == "telegram_notify_and_wait":
+            result = await self.tools.telegram_notify_and_wait(
+                arguments["question"],
+                arguments.get("context", "")
+            )
         elif name == "telegram_poll":
             result = await self.tools.telegram_poll(**arguments)
         else:
@@ -102,6 +114,7 @@ class MCPServer:
                 "structuredContent": {"error": f"unknown tool: {name}"},
                 "isError": True,
             }
+
         return {
             "content": [{"type": "text", "text": json.dumps(result)}],
             "structuredContent": result,
