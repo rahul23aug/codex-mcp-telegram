@@ -1,0 +1,8 @@
+{
+  "servers": [
+    {
+      "name": "telegram",
+      "command": ["python", "-m", "codex_mcp_server.server"]
+    }
+  ]
+}
