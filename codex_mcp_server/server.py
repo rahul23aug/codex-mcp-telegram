@@ -1,6 +1,7 @@
 """MCP Server implementation for Codex CLI with Telegram integration."""
 
 import asyncio
+import json
 import logging
 import sys
 from typing import Any, Optional
@@ -40,7 +41,7 @@ except ImportError:
 
 from .codex_executor import CodexExecutor
 from .config import Config
-from .telegram_bot import TelegramBot
+from .telegram_bridge import TelegramBridge
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ app = Server("codex-mcp-telegram")
 
 # Global executor with notification support (will be initialized in main)
 _global_executor: Optional[CodexExecutor] = None
-_telegram_bot: Optional[TelegramBot] = None
+_telegram_bridge: Optional[TelegramBridge] = None
 
 
 @app.list_tools()
@@ -101,6 +102,33 @@ async def handle_list_tools() -> list[types.Tool]:
                 "properties": {},
                 "required": []
             }
+        ),
+        types.Tool(
+            name="telegram_notify_and_wait",
+            description=(
+                "Send a Telegram message for human escalation and wait for a reply. "
+                "The recipient must reply with #<id> <answer>."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The question or prompt to send over Telegram"
+                    },
+                    "timeout_sec": {
+                        "type": "integer",
+                        "description": "How long to wait for a reply before timing out",
+                        "default": 1800
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "Optional context to include with the question",
+                        "default": ""
+                    }
+                },
+                "required": ["question"]
+            }
         )
     ]
 
@@ -114,15 +142,12 @@ async def handle_call_tool(
         arguments = {}
     
     try:
-        # Use global executor if available (has notification support), otherwise create new one
         executor = _global_executor if _global_executor else CodexExecutor()
         
         if name == "codex_exec":
             prompt = arguments.get("prompt", "")
             model = arguments.get("model")
-            # Enable monitoring for proactive notifications
-            monitor = _telegram_bot is not None
-            result = await executor.execute(prompt, model=model, monitor=monitor)
+            result = await executor.execute(prompt, model=model)
             return [types.TextContent(
                 type="text",
                 text=result
@@ -142,6 +167,22 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=status
+            )]
+        
+        elif name == "telegram_notify_and_wait":
+            if _telegram_bridge is None:
+                raise RuntimeError("Telegram bridge is not configured. Check TELEGRAM_* environment variables.")
+            question = arguments.get("question", "")
+            timeout_sec = int(arguments.get("timeout_sec", 1800))
+            context = arguments.get("context", "")
+            response = await _telegram_bridge.ask_and_wait(
+                question=question,
+                timeout_sec=timeout_sec,
+                context=context,
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(response)
             )]
         
         else:
@@ -178,25 +219,22 @@ async def main():
         logger.error(f"Configuration error: {error_msg}")
         sys.exit(1)
     
-    # Start Telegram bot if configured (bot will create executor with notification support)
-    global _global_executor, _telegram_bot
-    telegram_bot: Optional[TelegramBot] = None
-    bot_task: Optional[asyncio.Task] = None
+    # Start Telegram bridge if configured
+    global _global_executor, _telegram_bridge
+    telegram_bridge: Optional[TelegramBridge] = None
     if config.telegram_enabled:
         try:
-            telegram_bot = TelegramBot(config, app)
-            _telegram_bot = telegram_bot  # Store globally
-            # Use the bot's executor (which has notification support) as the global one
-            _global_executor = telegram_bot.executor
-            bot_task = asyncio.create_task(telegram_bot.start())
-            if config.enable_proactive_notifications:
-                logger.info("Telegram bot starting with proactive notification support...")
-            else:
-                logger.info("Telegram bot starting...")
-            # Give bot a moment to initialize
-            await asyncio.sleep(1)
+            telegram_bridge = TelegramBridge(
+                bot_token=config.telegram_bot_token,
+                chat_id=config.telegram_chat_id,
+                allowed_user_ids=config.telegram_allowed_user_ids,
+            )
+            _telegram_bridge = telegram_bridge
+            _global_executor = CodexExecutor()
+            await telegram_bridge.start()
+            logger.info("Telegram bridge polling started.")
         except Exception as e:
-            logger.error(f"Failed to start Telegram bot: {e}", exc_info=True)
+            logger.error(f"Failed to start Telegram bridge: {e}", exc_info=True)
     
     # Run MCP server over stdio
     try:
@@ -218,17 +256,11 @@ async def main():
         logger.error(f"Error running MCP server: {e}", exc_info=True)
         raise
     finally:
-        if telegram_bot:
+        if telegram_bridge:
             try:
-                if bot_task and not bot_task.done():
-                    bot_task.cancel()
-                    try:
-                        await bot_task
-                    except asyncio.CancelledError:
-                        pass
-                await telegram_bot.stop()
+                await telegram_bridge.stop()
             except Exception as e:
-                logger.error(f"Error stopping Telegram bot: {e}", exc_info=True)
+                logger.error(f"Error stopping Telegram bridge: {e}", exc_info=True)
 
 
 if __name__ == "__main__":
