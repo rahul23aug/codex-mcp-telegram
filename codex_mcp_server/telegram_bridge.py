@@ -101,7 +101,7 @@ class TelegramBridge:
         if update.message.from_user.id not in self.allowed_user_ids:
             return
 
-        match = re.match(r"^#(?P<correlation_id>\S+)\s+(?P<answer>.+)$", update.message.text, re.DOTALL)
+        match = re.match(r"^#(?P<correlation_id>\\S+)\\s+(?P<answer>.+)$", update.message.text, re.DOTALL)
         if not match:
             return
 
