@@ -111,29 +111,19 @@ Reply with #<id> <answer>
 
 ## MCP Tools
 
-The server exposes the following MCP tools:
+The server exposes the following MCP tool:
 
-### `codex_exec`
+### `telegram_notify_and_wait`
 
-Execute a Codex CLI command.
-
-**Parameters:**
-- `prompt` (required): The prompt/command to execute
-- `model` (optional): Model to use (e.g., "o1", "o3")
-
-### `codex_review`
-
-Run a code review on specified files or directories.
+Send a Telegram message and wait for a human response.
 
 **Parameters:**
-- `target` (required): File or directory path to review
-- `prompt` (optional): Specific review instructions
+- `question` (required): Question to send
+- `timeout_sec` (optional): Seconds to wait (default: 1800)
+- `context` (optional): Additional context to include
 
-### `codex_status`
-
-Check Codex CLI availability and version.
-
-**Parameters:** None
+**Response:**
+Returns JSON with `answer` and `correlation_id`. On timeout, `answer` is `null` and an `error` field is included.
 
 ### `telegram_notify_and_wait`
 
