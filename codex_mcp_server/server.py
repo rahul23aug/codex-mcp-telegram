@@ -47,8 +47,6 @@ logger = logging.getLogger(__name__)
 # Create server instance
 app = Server("codex-mcp-telegram")
 
-# Global executor with notification support (will be initialized in main)
-_global_executor: Optional[CodexExecutor] = None
 _telegram_bridge: Optional[TelegramBridge] = None
 
 
@@ -122,28 +120,17 @@ async def handle_call_tool(
         arguments = {}
     
     try:
-        executor = _global_executor if _global_executor else CodexExecutor()
-        
-        if name == "codex_exec":
-            prompt = arguments.get("prompt", "")
-            model = arguments.get("model")
-            result = await executor.execute(prompt, model=model)
-            return [types.TextContent(
-                type="text",
-                text=result
-            )]
-        
-        elif name == "codex_review":
-            target = arguments.get("target", "")
-            review_prompt = arguments.get("prompt", "")
-            result = await executor.review(target, review_prompt)
-            return [types.TextContent(
-                type="text",
-                text=result
-            )]
-        
-        elif name == "codex_status":
-            status = await executor.check_status()
+        if name == "telegram_notify_and_wait":
+            if _telegram_bridge is None:
+                raise RuntimeError("Telegram bridge is not configured. Check TELEGRAM_* environment variables.")
+            question = arguments.get("question", "")
+            timeout_sec = int(arguments.get("timeout_sec", 1800))
+            context = arguments.get("context", "")
+            response = await _telegram_bridge.ask_and_wait(
+                question=question,
+                timeout_sec=timeout_sec,
+                context=context,
+            )
             return [types.TextContent(
                 type="text",
                 text=json.dumps(response)
@@ -200,7 +187,7 @@ async def main():
         sys.exit(1)
     
     # Start Telegram bridge if configured
-    global _global_executor, _telegram_bridge
+    global _telegram_bridge
     telegram_bridge: Optional[TelegramBridge] = None
     if config.telegram_enabled:
         try:
@@ -210,7 +197,6 @@ async def main():
                 allowed_user_ids=config.telegram_allowed_user_ids,
             )
             _telegram_bridge = telegram_bridge
-            _global_executor = CodexExecutor()
             await telegram_bridge.start()
             logger.info("Telegram bridge polling started.")
         except Exception as e:
