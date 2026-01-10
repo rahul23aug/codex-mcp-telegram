@@ -5,7 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="6b726ade-7fe0-4949-8ddb-69e4dd2c2157" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.codex/mcp.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/codex_mcp_server/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/codex_mcp_server/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/codex_mcp_server/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/codex_mcp_server/server.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/codex_mcp_server/telegram_bot.py" beforeDir="false" afterPath="$PROJECT_DIR$/codex_mcp_server/telegram_bot.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/codex_mcp_server/telegram_tools.py" beforeDir="false" afterPath="$PROJECT_DIR$/codex_mcp_server/telegram_tools.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -52,6 +56,11 @@
     &quot;last_opened_file_path&quot;: &quot;/Users/rahul/PycharmProjects/codex-mcp-telegram&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+    </key>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>

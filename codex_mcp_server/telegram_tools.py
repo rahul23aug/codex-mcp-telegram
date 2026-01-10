@@ -1,15 +1,16 @@
 # codex_mcp_server/telegram_tools.py
 from .telegram_store import TelegramStore
 from .telegram_bot import TelegramBot
-from .config import COMMAND_TIMEOUT
+from .config import Config
 
 class TelegramTools:
     def __init__(self, store: TelegramStore, bot: TelegramBot):
         self.store = store
         self.bot = bot
+        self.config = Config()
 
     async def telegram_prompt(self, question: str, context: str = ""):
-        req = self.store.create(question, context, COMMAND_TIMEOUT)
+        req = self.store.create(question, context, self.config.command_timeout)
         await self.bot.send_prompt(req)
         return {"correlation_id": req.id}
 
