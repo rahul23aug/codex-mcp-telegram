@@ -125,6 +125,18 @@ Send a Telegram message and wait for a human response.
 **Response:**
 Returns JSON with `answer` and `correlation_id`. On timeout, `answer` is `null` and an `error` field is included.
 
+### `telegram_notify_and_wait`
+
+Send a Telegram message and wait for a human response.
+
+**Parameters:**
+- `question` (required): Question to send
+- `timeout_sec` (optional): Seconds to wait (default: 1800)
+- `context` (optional): Additional context to include
+
+**Response:**
+Returns JSON with `answer` and `correlation_id`. On timeout, `answer` is `null` and an `error` field is included.
+
 ## Security Considerations
 
 1. **Authentication**: Always configure `TELEGRAM_ALLOWED_USER_IDS` to prevent unauthorized access.

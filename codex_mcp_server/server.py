@@ -80,6 +80,33 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["question"]
             }
+        ),
+        types.Tool(
+            name="telegram_notify_and_wait",
+            description=(
+                "Send a Telegram message for human escalation and wait for a reply. "
+                "The recipient must reply with #<id> <answer>."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The question or prompt to send over Telegram"
+                    },
+                    "timeout_sec": {
+                        "type": "integer",
+                        "description": "How long to wait for a reply before timing out",
+                        "default": 1800
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "Optional context to include with the question",
+                        "default": ""
+                    }
+                },
+                "required": ["question"]
+            }
         )
     ]
 
@@ -94,6 +121,22 @@ async def handle_call_tool(
     
     try:
         if name == "telegram_notify_and_wait":
+            if _telegram_bridge is None:
+                raise RuntimeError("Telegram bridge is not configured. Check TELEGRAM_* environment variables.")
+            question = arguments.get("question", "")
+            timeout_sec = int(arguments.get("timeout_sec", 1800))
+            context = arguments.get("context", "")
+            response = await _telegram_bridge.ask_and_wait(
+                question=question,
+                timeout_sec=timeout_sec,
+                context=context,
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(response)
+            )]
+        
+        elif name == "telegram_notify_and_wait":
             if _telegram_bridge is None:
                 raise RuntimeError("Telegram bridge is not configured. Check TELEGRAM_* environment variables.")
             question = arguments.get("question", "")
