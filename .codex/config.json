@@ -1,9 +1,8 @@
 {
-  "system_prompt_file": "project_prompts/codex_system_prompt.txt",
-  "mcp_servers": [
-    {
-      "name": "telegram",
-      "command": ["python", "-m", "codex_mcp_server.server"]
+  "mcpServers": {
+    "codex-mcp-telegram": {
+      "command": "codex-mcp-telegram",
+      "args": []
     }
-  ]
+  }
 }
