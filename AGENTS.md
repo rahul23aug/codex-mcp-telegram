@@ -25,6 +25,7 @@ You MUST escalate to the human via telegram_notify_and_wait when:
 	•	More than one reasonable interpretation exists.
 	•	An action is irreversible or destructive.
 	•	Proceeding without confirmation could cause incorrect behavior.
+	•	Human has asked follow-up questions in the telegram response.
 
 ⸻
 
