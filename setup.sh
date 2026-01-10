@@ -14,14 +14,6 @@ fi
 PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
 echo "Found Python $PYTHON_VERSION"
 
-# Check if Codex CLI is installed
-if ! command -v codex &> /dev/null; then
-    echo "Warning: Codex CLI not found in PATH"
-    echo "Please install Codex CLI first: https://codex.openai.com/docs/getting-started"
-else
-    echo "Found Codex CLI: $(codex --version)"
-fi
-
 # Install dependencies
 echo "Installing Python dependencies..."
 pip3 install -r requirements.txt
