@@ -4,6 +4,11 @@ import os
 from pathlib import Path
 from typing import Optional
 
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - optional dependency
+    load_dotenv = None
+
 
 class Config:
     """Configuration loader and manager."""
@@ -22,13 +27,20 @@ class Config:
             self.config_dir = config_path.parent
         
         self.config_path = config_path
+        self._load_dotenv()
         self._load_config()
-    
+
+    def _load_dotenv(self) -> None:
+        if load_dotenv is None:
+            return
+        load_dotenv()
+
     def _load_config(self):
         """Load configuration from environment variables or defaults."""
         # Telegram Bot Configuration
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+        self.command_timeout = int(os.getenv("TELEGRAM_COMMAND_TIMEOUT_SEC", "1800"))
         
         # Security: Allowed user IDs (comma-separated)
         allowed_ids = os.getenv("TELEGRAM_ALLOWED_USER_IDS", "")
