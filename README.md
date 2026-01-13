@@ -91,7 +91,7 @@ The server communicates via stdio following the MCP protocol.
 
 The MCP tool `telegram_notify_and_wait` sends a message to the configured chat and waits for a reply.
 
-**Reply format:** `#<correlation_id> <answer>`
+**Reply format:** reply directly to the escalation message or use `#<correlation_id> <answer>`
 
 Example message:
 ```
@@ -99,7 +99,8 @@ Example message:
 
 Should we proceed with the migration?
 
-Reply with #<id> <answer>
+Reply directly to this message, or reply with:
+#<id> <answer>
 ```
 
 ### Getting Your Telegram User ID
@@ -167,7 +168,7 @@ Returns JSON with `answer` and `correlation_id`. On timeout, `answer` is `null` 
 
 ### Telegram polling and timeouts
 - Ensure `TELEGRAM_CHAT_ID` matches the chat where the bot should post escalation messages
-- Replies must include the correlation ID: `#<id> <answer>`
+- Replies should be sent as a direct reply to the escalation message or include the correlation ID: `#<id> <answer>`
 - If timeouts persist, confirm the bot has permission to read messages in the chat
 
 ## MCP Client Configuration (Codex CLI)
@@ -210,8 +211,8 @@ If automated tests are not available, verify the following manually:
 
 - Start the MCP server and call `telegram_notify_and_wait`.
 - Confirm the Telegram message includes the correlation ID and reply instructions.
-- Reply with `#<id> <answer>` from an allowed user ID and confirm the tool returns the answer.
-- Reply without `#<id>` and confirm nothing happens.
+- Reply directly to the escalation message or with `#<id> <answer>` from an allowed user ID and confirm the tool returns the answer.
+- Reply without `#<id>` and not as a reply to the escalation message and confirm nothing happens.
 - Reply from an unallowed user ID and confirm nothing happens.
 - Let the call time out and confirm the tool returns a clear timeout error.
 

@@ -28,6 +28,8 @@ class TelegramBridge:
         self.allowed_user_ids = allowed_user_ids
         self.poll_timeout_sec = poll_timeout_sec
         self._pending: dict[str, asyncio.Future[str]] = {}
+        self._pending_message_ids: dict[str, int] = {}
+        self._pending_by_message_id: dict[int, str] = {}
         self._pending_lock = asyncio.Lock()
         self._polling_task: Optional[asyncio.Task] = None
         self._last_update_id: Optional[int] = None
@@ -62,7 +64,10 @@ class TelegramBridge:
             self._pending[correlation_id] = future
 
         message = self._format_prompt(question, correlation_id, context)
-        await self.bot.send_message(chat_id=self.chat_id, text=message)
+        sent_message = await self.bot.send_message(chat_id=self.chat_id, text=message)
+        async with self._pending_lock:
+            self._pending_message_ids[correlation_id] = sent_message.message_id
+            self._pending_by_message_id[sent_message.message_id] = correlation_id
 
         try:
             answer = await asyncio.wait_for(future, timeout=timeout_sec)
@@ -101,6 +106,17 @@ class TelegramBridge:
         if update.message.from_user.id not in self.allowed_user_ids:
             return
 
+        answer = update.message.text.strip()
+        if not answer:
+            return
+
+        reply_to_message = update.message.reply_to_message
+        if reply_to_message:
+            correlation_id = self._pending_by_message_id.get(reply_to_message.message_id)
+            if correlation_id:
+                await self._resolve_pending(correlation_id, answer)
+                return
+
         match = re.match(r"^#(?P<correlation_id>\\S+)\\s+(?P<answer>.+)$", update.message.text, re.DOTALL)
         if not match:
             return
@@ -110,14 +126,23 @@ class TelegramBridge:
         if not answer:
             return
 
+        await self._resolve_pending(correlation_id, answer)
+
+    async def _resolve_pending(self, correlation_id: str, answer: str) -> None:
         async with self._pending_lock:
             future = self._pending.pop(correlation_id, None)
+            message_id = self._pending_message_ids.pop(correlation_id, None)
+            if message_id is not None:
+                self._pending_by_message_id.pop(message_id, None)
         if future and not future.done():
             future.set_result(answer)
 
     async def _cleanup_pending(self, correlation_id: str) -> None:
         async with self._pending_lock:
             future = self._pending.pop(correlation_id, None)
+            message_id = self._pending_message_ids.pop(correlation_id, None)
+            if message_id is not None:
+                self._pending_by_message_id.pop(message_id, None)
         if future and not future.done():
             future.cancel()
 
@@ -138,5 +163,6 @@ class TelegramBridge:
         ]
         if context:
             prompt_lines.extend(["Context:", context, ""])
-        prompt_lines.append(f"Reply with #{correlation_id} <answer>")
+        prompt_lines.append("Reply directly to this message, or reply with:")
+        prompt_lines.append(f"#{correlation_id} <answer>")
         return "\n".join(prompt_lines)
